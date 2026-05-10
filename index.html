@@ -174,7 +174,8 @@ input,button,textarea,select{font-family:inherit}
 .drawer::-webkit-scrollbar{display:none}
 .drawer.open{transform:translateX(-50%) translateY(0)}
 .drawer::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:50%;height:1px;background:linear-gradient(90deg,transparent,rgba(0,214,143,.3),transparent)}
-.dh{width:36px;height:4px;background:var(--br3);border-radius:2px;margin:12px auto 4px}
+.dh{width:36px;height:4px;background:var(--br3);border-radius:2px;margin:12px auto 4px;cursor:pointer;transition:opacity 160ms;background:linear-gradient(90deg,var(--br3),var(--t3),var(--br3))}
+.dh:active{opacity:.6}
 .dhead{padding:12px 20px 0;font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.5px}
 .dsub{padding:4px 20px 0;font-size:12px;color:var(--t3)}
 .dbody{padding:16px 20px 20px}
@@ -320,8 +321,14 @@ input,button,textarea,select{font-family:inherit}
 /* MISC */
 .screen-title{padding:56px 20px 16px;position:relative;border-bottom:1px solid var(--br)}
 .screen-title::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--g) 40%,transparent);box-shadow:0 0 16px rgba(0,214,143,.4)}
-.screen-title h2{font-size:24px;font-weight:800;color:var(--t1);letter-spacing:-.8px}
-.screen-title p{font-size:12px;color:var(--t3);margin-top:3px}
+.screen-title-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.btn-back{display:flex;align-items:center;justify-content:center;min-width:40px;height:40px;margin-top:-2px;margin-left:-4px;border-radius:var(--r2);border:1px solid var(--br2);background:var(--card);color:var(--t2);font-size:20px;line-height:1;cursor:pointer;transition:background 160ms,border-color 160ms,color 160ms,transform 160ms var(--spring)}
+.btn-back:active{transform:scale(.92);background:var(--card-h);border-color:rgba(0,214,143,.35);color:var(--g)}
+.screen-title h2{font-size:24px;font-weight:800;color:var(--t1);letter-spacing:-.8px;flex:1;min-width:0}
+.screen-title p{font-size:12px;color:var(--t3);margin-top:3px;padding-left:0}
+.day-back-bar{padding:12px 16px 0}
+.btn-agenda-back{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--br2);background:var(--card);font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;transition:all 160ms var(--ease2)}
+.btn-agenda-back:active{transform:scale(.96);border-color:rgba(0,214,143,.35);color:var(--g);background:rgba(0,214,143,.06)}
 .vrow{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--br)}.vrow:last-child{border-bottom:none}
 
 .today-badge{display:inline-flex;align-items:center;gap:6px;background:var(--info-bg);color:var(--info);border:1px solid rgba(77,166,255,.25);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-top:10px;transition:all 150ms;text-decoration:none}
@@ -459,7 +466,7 @@ input,button,textarea,select{font-family:inherit}
       <div class="phrole" id="dash-role">●</div>
       <div class="pht" id="dash-title">MiCobranza</div>
       <div class="phs" id="dash-date"></div>
-      <a class="today-badge" onclick="goTo('pagos')">💳 Ver pagos →</a>
+      <a class="today-badge" onclick="navigatePagosFromCurrent()">💳 Ver pagos →</a>
     </div>
     <div id="dash-body"><div class="spin2"></div></div>
   </div>
@@ -486,7 +493,13 @@ input,button,textarea,select{font-family:inherit}
 
   <!-- PAGOS -->
   <div id="s-pagos" class="screen">
-    <div class="screen-title"><h2>Pagos recientes</h2><p id="pagos-sub">Últimos movimientos</p></div>
+    <div class="screen-title">
+      <div class="screen-title-row">
+        <button type="button" class="btn-back" onclick="goBackFromPagos()" title="Volver" aria-label="Volver atrás">‹</button>
+        <h2>Pagos recientes</h2>
+      </div>
+      <p id="pagos-sub">Últimos movimientos</p>
+    </div>
     <div id="payments-list"></div>
   </div>
 
@@ -558,7 +571,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Nuevo cliente -->
 <div class="drawer" id="d-add-client">
-  <div class="dh"></div><div class="dhead">Nuevo cliente</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">Nuevo cliente</div>
   <div class="dbody">
     <div class="fg"><label class="fl">Nombre *</label><input class="fi" id="c-name" placeholder="Apellido, Nombre"/></div>
     <div class="fr2">
@@ -593,7 +606,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Cobro -->
 <div class="drawer" id="d-payment">
-  <div class="dh"></div><div class="dhead" id="pay-title">Registrar cobro</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead" id="pay-title">Registrar cobro</div>
   <div class="dbody">
     <div class="fg"><label class="fl">Método</label>
       <div class="msel" id="pay-msel">
@@ -612,11 +625,11 @@ input,button,textarea,select{font-family:inherit}
 </div>
 
 <!-- DRAWER: Detalle -->
-<div class="drawer" id="d-detail" style="max-height:95dvh"><div class="dh"></div><div id="d-detail-body"></div></div>
+<div class="drawer" id="d-detail" style="max-height:95dvh"><div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div id="d-detail-body"></div></div>
 
 <!-- DRAWER: WhatsApp -->
 <div class="drawer" id="d-wapp">
-  <div class="dh"></div><div class="dhead">💬 WhatsApp</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">💬 WhatsApp</div>
   <div class="dsub" id="wapp-sub">Mensaje de cobranza</div>
   <div class="dbody">
     <div class="fg"><label class="fl">Tipo de mensaje</label><div style="display:flex;flex-direction:column;gap:6px" id="wapp-tipos"></div></div>
@@ -634,7 +647,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Escanear -->
 <div class="drawer" id="d-scan" style="max-height:96dvh">
-  <div class="dh"></div><div class="dhead">＋ Agregar afiliados</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">＋ Agregar afiliados</div>
   <div class="dsub">Elegí cómo querés cargarlos</div>
   <div class="dbody">
     <input type="file" id="scan-input" accept="image/*" style="display:none" onchange="onPhotoAttach(event)"/>
@@ -719,7 +732,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Nuevo vendedor -->
 <div class="drawer" id="d-add-member">
-  <div class="dh"></div><div class="dhead">Nuevo vendedor</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">Nuevo vendedor</div>
   <div class="dbody">
     <div class="fg"><label class="fl">Nombre</label><input class="fi" id="m-name" placeholder="Ej: Lucas"/></div>
     <div class="fg"><label class="fl">Código de acceso</label>
@@ -736,7 +749,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Credenciales -->
 <div class="drawer" id="d-creds">
-  <div class="dh"></div><div class="dhead">📋 Credenciales</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">📋 Credenciales</div>
   <div class="dsub" id="creds-sub">Registrar envío al afiliado</div>
   <div class="dbody">
     <div id="creds-info"></div>
@@ -750,7 +763,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Recontacto manual -->
 <div class="drawer" id="d-rcontact">
-  <div class="dh"></div><div class="dhead">📞 Registrar contacto</div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div><div class="dhead">📞 Registrar contacto</div>
   <div class="dsub" id="rc-sub">Otro tipo de contacto</div>
   <div class="dbody">
     <div class="fg"><label class="fl">Tipo</label>
@@ -769,7 +782,7 @@ input,button,textarea,select{font-family:inherit}
 
 <!-- DRAWER: Nueva/Editar tarea -->
 <div class="drawer" id="d-task">
-  <div class="dh"></div>
+  <div class="dh" onclick="closeD()" title="Cerrar" aria-label="Cerrar panel"></div>
   <div class="dhead" id="task-title">Nueva tarea</div>
   <div class="dsub" id="task-sub">Agendá un recordatorio</div>
   <div class="dbody">
@@ -820,7 +833,9 @@ function saveDB(db){
 }
 
 let session=null;
-let S={clients:[],payments:[],tasks:[],filter:'Todos',segment:'todos',modalidad:null,payId:null,agendaView:'mes',agendaMonth:null,agendaDay:null,agendaTaskId:null};
+let S={clients:[],payments:[],tasks:[],filter:'Todos',segment:'todos',modalidad:null,payId:null,agendaView:'mes',agendaMonth:null,agendaDay:null,agendaTaskId:null,screenBeforePagos:'dash'};
+var _histProg=false;
+var _pvPushed=false;
 
 /* ═══════════════════════════════════════════════════
    BILLING ENGINE
@@ -928,7 +943,10 @@ function doLogin(){
   document.getElementById('lcode').value = '';
 }
 function logout(){
+  closeD(true);
   LS.d('mc_sess'); session = null;
+  document.querySelector('.photo-viewer') && document.querySelector('.photo-viewer').remove();
+  _pvPushed = false;
   document.getElementById('app').style.display = 'none';
   document.getElementById('fabs').style.display = 'none';
   document.getElementById('fabs-agenda').style.display = 'none';
@@ -949,6 +967,7 @@ function startApp(){
     ex.querySelector('.nb-lbl').textContent = 'Ajustes';
     ex.onclick = function(){ goTo('ajustes') };
   }
+  try { history.replaceState({ mcShell: 1 }, '', location.pathname + location.search); } catch(e){}
   loadAll(); goTo('dash');
 }
 
@@ -2078,6 +2097,15 @@ function addPhotoToClient(clientId){
   input.click();
 }
 
+function closePhotoViewerOverlay(overlay){
+  if(_pvPushed){
+    _pvPushed = false;
+    _histProg = true;
+    try { history.back(); } catch(e){}
+    setTimeout(function(){ _histProg = false; }, 0);
+  }
+  if(overlay && overlay.parentNode) overlay.remove();
+}
 function openPhotoViewer(clientId, photoId){
   const c = (session.role==='admin' ? getDB().clients : S.clients).find(function(x){ return x.id === clientId });
   if(!c) return;
@@ -2096,10 +2124,12 @@ function openPhotoViewer(clientId, photoId){
     '</div>' +
     '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:10px">Adjuntada '+fmtDT(ph.added_at)+'</div>';
   document.body.appendChild(overlay);
-  overlay.querySelector('.pv-close').onclick = function(){ overlay.remove() };
+  _pvPushed = true;
+  try { history.pushState({ mcPv: 1 }, ''); } catch(e){ _pvPushed = false; }
+  overlay.querySelector('.pv-close').onclick = function(){ closePhotoViewerOverlay(overlay); };
   overlay.querySelector('.pv-dl').onclick = function(){ downloadPhoto(clientId, photoId) };
   overlay.querySelector('.pv-del').onclick = function(){ deletePhoto(clientId, photoId, overlay) };
-  overlay.onclick = function(e){ if(e.target === overlay) overlay.remove() };
+  overlay.onclick = function(e){ if(e.target === overlay) closePhotoViewerOverlay(overlay); };
 }
 
 function downloadPhoto(clientId, photoId){
@@ -2120,7 +2150,7 @@ function deletePhoto(clientId, photoId, overlay){
   if(!c) return;
   c.photos = (c.photos||[]).filter(function(p){ return p.id !== photoId });
   saveDB(db); loadAll();
-  if(overlay) overlay.remove();
+  closePhotoViewerOverlay(overlay);
   toast('Foto eliminada');
   setTimeout(function(){ openDetail(clientId) }, 100);
 }
@@ -2290,7 +2320,8 @@ function renderAgendaDay(){
     pending: dayTasks.filter(function(t){ return !t.done && !isOverdue(t) }).length,
     overdue: dayTasks.filter(function(t){ return isOverdue(t) }).length
   };
-  let h = '<div class="day-header"><div class="day-title">'+dName+'</div><div class="day-sub">'+(isToday?'Hoy · ':'')+stats.total+' tarea'+(stats.total!==1?'s':'')+'</div></div>';
+  let h = '<div class="day-back-bar"><button type="button" class="btn-agenda-back" onclick="setAgendaView(\'mes\')" title="Volver al mes">‹ Mes</button></div>';
+  h += '<div class="day-header"><div class="day-title">'+dName+'</div><div class="day-sub">'+(isToday?'Hoy · ':'')+stats.total+' tarea'+(stats.total!==1?'s':'')+'</div></div>';
   h += '<div class="day-nav"><button class="month-arrow" onclick="changeDay(-1)">‹</button><button class="btn-today" onclick="goToToday()">Hoy</button><button class="month-arrow" onclick="changeDay(1)">›</button></div>';
   if(stats.total > 0){
     h += '<div class="day-stats">';
@@ -2470,7 +2501,33 @@ function deleteCurrentTask(){
 /* ═══════════════════════════════════════════════════
    UI HELPERS / NAV
 ═══════════════════════════════════════════════════ */
+function getActiveSection(){
+  const app = document.getElementById('app');
+  if(!app || app.style.display === 'none') return 'login';
+  const el = document.querySelector('#app .screen.active');
+  if(!el) return 'dash';
+  return String(el.id || '').replace(/^s-/,'') || 'dash';
+}
+function navigatePagosFromCurrent(){
+  var cur = getActiveSection();
+  if(cur !== 'pagos') S.screenBeforePagos = cur;
+  try { history.pushState({ mcPagos: 1 }, ''); } catch(e){}
+  goTo('pagos');
+}
+function goBackFromPagos(){
+  var t = S.screenBeforePagos || 'dash';
+  _histProg = true;
+  goTo(t);
+  try { history.back(); } catch(e){}
+  setTimeout(function(){ _histProg = false; }, 0);
+}
 function goTo(s){
+  var prev = getActiveSection();
+  if(prev === 'pagos' && s !== 'pagos'){
+    _histProg = true;
+    try { history.back(); } catch(e){}
+    setTimeout(function(){ _histProg = false; }, 0);
+  }
   document.querySelectorAll('.screen').forEach(function(x){ x.classList.remove('active') });
   document.querySelectorAll('.nb').forEach(function(x){ x.classList.remove('active') });
   document.getElementById('s-'+s).classList.add('active');
@@ -2484,11 +2541,53 @@ function goTo(s){
 function openD(n){
   document.getElementById('ov').classList.add('open');
   document.getElementById('d-'+n).classList.add('open');
+  try { history.pushState({ mcDrawer: n }, ''); } catch(e){}
 }
-function closeD(){
+function closeD(skipHistSync){
+  var hadDrawer = document.getElementById('ov').classList.contains('open');
   document.getElementById('ov').classList.remove('open');
   document.querySelectorAll('.drawer').forEach(function(d){ d.classList.remove('open') });
+  if(hadDrawer && !skipHistSync){
+    _histProg = true;
+    try { history.back(); } catch(e){}
+    setTimeout(function(){ _histProg = false; }, 0);
+  }
 }
+function mcUiHandlePopState(){
+  if(_histProg) return;
+  if(document.querySelector('.photo-viewer')){
+    _pvPushed = false;
+    document.querySelector('.photo-viewer').remove();
+    return;
+  }
+  if(document.getElementById('ov').classList.contains('open')){
+    document.getElementById('ov').classList.remove('open');
+    document.querySelectorAll('.drawer').forEach(function(d){ d.classList.remove('open') });
+    return;
+  }
+  if(getActiveSection() === 'pagos'){
+    goTo(S.screenBeforePagos || 'dash');
+    return;
+  }
+  var appEl = document.getElementById('app');
+  if(appEl && appEl.style.display !== 'none' && document.getElementById('s-agenda').classList.contains('active') && S.agendaView === 'dia'){
+    setAgendaView('mes');
+    return;
+  }
+}
+window.addEventListener('popstate', mcUiHandlePopState);
+document.addEventListener('keydown', function(ev){
+  if(ev.key !== 'Escape') return;
+  if(document.querySelector('.photo-viewer')){
+    ev.preventDefault();
+    closePhotoViewerOverlay(document.querySelector('.photo-viewer'));
+    return;
+  }
+  if(document.getElementById('ov').classList.contains('open')){
+    ev.preventDefault();
+    closeD();
+  }
+});
 
 /* ═══════════════════════════════════════════════════
    INIT
