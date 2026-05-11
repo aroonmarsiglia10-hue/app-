@@ -528,6 +528,10 @@ input,button,textarea,select{font-family:inherit}
           <div class="srl"><div class="srt">Exportar backup</div><div class="srs">JSON con todos los datos</div></div>
           <button class="stbtn" onclick="exportData()">Exportar</button>
         </div>
+        <div class="srow">
+          <div class="srl"><div class="srt">Importar backup</div><div class="srs">Restaurar desde JSON descargado</div></div>
+          <button class="stbtn" onclick="importData()">Importar</button>
+        </div>
         <div class="srow" style="border-bottom:none">
           <div class="srl"><div class="srt" style="color:var(--err)">Cerrar sesión</div></div>
           <button class="stbtn" style="color:var(--err);border-color:rgba(255,92,122,.2)" onclick="logout()">Salir</button>
@@ -828,8 +832,21 @@ const LS = {
 function getDB(){return LS.g('mc_db')||{clients:[],payments:[],members:[],tasks:[],adminCode:''}}
 function saveDB(db){
   const ok = LS.s('mc_db',db);
-  if(!ok) toast('⚠️ Almacenamiento lleno. Borrá fotos viejas.', true);
-  return ok;
+  if(!ok){
+    toast('🚨 Error: no se pudo guardar. Almacenamiento lleno — borrá fotos para liberar espacio.', true);
+    throw new Error('SAVE_FAILED');
+  }
+  return true;
+}
+function checkStorageQuota(neededKB){
+  try {
+    // Medir tamaño real actual de la DB + estimado del delta
+    const current = JSON.stringify(LS.g('mc_db') || {});
+    const currentKB = Math.ceil((current.length * 2) / 1024); // UTF-16
+    const totalNeeded = currentKB + neededKB;
+    const LIMIT_KB = 4800; // margen de seguridad sobre el límite de 5MB
+    return totalNeeded < LIMIT_KB;
+  } catch(e) { return false; }
 }
 
 let session=null;
@@ -903,7 +920,7 @@ function registerContact(clientId, meta){
   c.recontact_count = (c.recontact_count || 0) + 1;
   c.recontact_dates = (c.recontact_dates || []).concat([now]);
   c.recontact_log = log.concat([{ts: now, channel: meta.channel || 'manual', note: meta.note || null, template: meta.template || null}]);
-  saveDB(db);
+  try { saveDB(db); } catch(e) { return false; }
   return true;
 }
 
@@ -915,7 +932,7 @@ function markCredentialsSent(clientId){
   c.credentials_sent = true;
   c.credentials_sent_count = (c.credentials_sent_count || 0) + 1;
   c.credentials_sent_dates = (c.credentials_sent_dates || []).concat([now]);
-  saveDB(db);
+  try { saveDB(db); } catch(e) { return false; }
   return true;
 }
 
@@ -1007,12 +1024,12 @@ function insC(row){
     owner: session.id,
     created_at: new Date().toISOString()
   });
-  db.clients.push(rec); saveDB(db); return rec;
+  db.clients.push(rec); saveDB(db); return rec;  // saveDB lanza si falla
 }
 function insP(row){
   const db = getDB();
   const rec = Object.assign({}, row, {id: uid(), owner: session.id, created_at: new Date().toISOString()});
-  db.payments.push(rec); saveDB(db); return rec;
+  db.payments.push(rec); saveDB(db); return rec;  // saveDB lanza si falla
 }
 function delCli(id){
   const db = getDB();
@@ -1586,18 +1603,24 @@ function addClient(){
   const name = document.getElementById('c-name').value.trim();
   if(!name){ toast('Ingresá el nombre', true); return; }
   const enroll = document.getElementById('c-falta').value || null;
-  insC({
-    name: name,
-    dni: document.getElementById('c-dni').value.trim() || null,
-    phone: document.getElementById('c-phone').value.trim() || null,
-    address: document.getElementById('c-addr').value.trim() || null,
-    plan: document.getElementById('c-plan').value.trim() || null,
-    amount: document.getElementById('c-amount').value || null,
-    capitas: document.getElementById('c-capitas').value || 1,
-    enrollment_date: enroll,
-    fecha_alta: enroll,
-    modalidad: getMet('c-msel')
-  });
+  const amtRaw = document.getElementById('c-amount').value;
+  try {
+    insC({
+      name: name,
+      dni: document.getElementById('c-dni').value.trim() || null,
+      phone: document.getElementById('c-phone').value.trim() || null,
+      address: document.getElementById('c-addr').value.trim() || null,
+      plan: document.getElementById('c-plan').value.trim() || null,
+      amount: amtRaw ? parseFloat(amtRaw) : null,
+      capitas: parseInt(document.getElementById('c-capitas').value) || 1,
+      enrollment_date: enroll,
+      fecha_alta: enroll,
+      modalidad: getMet('c-msel')
+    });
+  } catch(e) {
+    if(e && e.message === 'SAVE_FAILED') return; // toast ya mostrado en saveDB
+    toast('Error inesperado al guardar', true); return;
+  }
   ['c-name','c-dni','c-phone','c-addr','c-plan','c-amount','c-capitas','c-falta'].forEach(function(i){ document.getElementById(i).value = '' });
   document.getElementById('c-charge-preview').style.display = 'none';
   closeD(); loadAll(); toast('✅ Cliente guardado');
@@ -1622,12 +1645,18 @@ function openPay(cid){
 function savePayment(){
   const a = document.getElementById('p-amount').value;
   if(!a || isNaN(Number(a))){ toast('Ingresá un monto válido', true); return; }
-  insP({client_id: S.payId, amount: Number(a), method: getMet('pay-msel'), date: document.getElementById('p-date').value, note: document.getElementById('p-note').value.trim() || null});
+  try {
+    insP({client_id: S.payId, amount: Number(a), method: getMet('pay-msel'), date: document.getElementById('p-date').value, note: document.getElementById('p-note').value.trim() || null});
+  } catch(e) {
+    if(e && e.message === 'SAVE_FAILED') return;
+    toast('Error inesperado al guardar cobro', true); return;
+  }
   closeD(); loadAll(); toast('✅ Cobro registrado');
 }
 function doDelC(id){
   if(!confirm('¿Eliminar cliente y sus pagos?')) return;
-  delCli(id); closeD(); loadAll(); toast('Cliente eliminado');
+  try { delCli(id); } catch(e) { if(e && e.message !== 'SAVE_FAILED') toast('Error al eliminar', true); return; }
+  closeD(); loadAll(); toast('Cliente eliminado');
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1660,7 +1689,7 @@ function addMember(){
   if(code === db.adminCode){ toast('Ese código es del admin', true); return; }
   if((db.members||[]).find(function(m){ return m.code === code })){ toast('Código ya existe', true); return; }
   db.members.push({id: uid(), name: name, code: code});
-  saveDB(db);
+  try { saveDB(db); } catch(e) { return; }
   document.getElementById('m-name').value = '';
   document.getElementById('m-code').value = '';
   closeD(); loadAll(); toast('✅ '+name+' creado · '+code);
@@ -1671,7 +1700,8 @@ function delMember(id){
   if(!m) return;
   if(!confirm('¿Eliminar a '+m.name+'?')) return;
   db.members = db.members.filter(function(x){ return x.id !== id });
-  saveDB(db); loadAll(); toast(m.name+' eliminado');
+  try { saveDB(db); } catch(e) { return; }
+  loadAll(); toast(m.name+' eliminado');
 }
 function exportData(){
   const blob = new Blob([JSON.stringify(Object.assign({}, getDB(), {exported: new Date().toISOString()}), null, 2)], {type:'application/json'});
@@ -1680,6 +1710,41 @@ function exportData(){
   a.download = 'micobranza_' + todayISO() + '.json';
   a.click();
   toast('✅ Backup descargado');
+}
+
+function importData(){
+  if(!confirm('Esto reemplazará TODOS los datos actuales con el backup. ¿Continuar?')) return;
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = '.json,application/json'; input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = function(e){
+    document.body.removeChild(input);
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      try {
+        const data = JSON.parse(ev.target.result);
+        if(!data || typeof data !== 'object') throw new Error('Archivo inválido');
+        // Validar estructura mínima
+        const restored = {
+          adminCode: data.adminCode || '',
+          clients: Array.isArray(data.clients) ? data.clients : [],
+          payments: Array.isArray(data.payments) ? data.payments : [],
+          members: Array.isArray(data.members) ? data.members : [],
+          tasks: Array.isArray(data.tasks) ? data.tasks : []
+        };
+        const ok = LS.s('mc_db', restored);
+        if(!ok){ toast('⚠️ Backup demasiado grande para importar (fotos). Intentá con un backup sin fotos.', true); return; }
+        toast('✅ Backup restaurado — ' + restored.clients.length + ' clientes, ' + restored.payments.length + ' cobros');
+        if(session) loadAll();
+      } catch(err){
+        toast('Error al leer el archivo: ' + (err.message || 'JSON inválido'), true);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 /* ═══════════════════════════════════════════════════
@@ -2048,20 +2113,26 @@ function savePhotoAttach(){
     _attachedPhotoData = null;
   }
   const photos = _attachedPhotoData ? [{id: uid(), dataUrl: _attachedPhotoData.dataUrl, added_at: new Date().toISOString()}] : [];
-  insC({
-    name: name,
-    dni: document.getElementById('pa-dni').value.trim() || null,
-    phone: document.getElementById('pa-phone').value.trim() || null,
-    address: document.getElementById('pa-addr').value.trim() || null,
-    plan: document.getElementById('pa-plan').value.trim() || null,
-    amount: parseAmount(document.getElementById('pa-amount').value) || null,
-    capitas: parseInt(document.getElementById('pa-cap').value) || 1,
-    modalidad: getMet('pa-msel'),
-    fecha_alta: enrollment, enrollment_date: enrollment,
-    photos: photos
-  });
+  const hadPhoto = !!_attachedPhotoData;
+  try {
+    insC({
+      name: name,
+      dni: document.getElementById('pa-dni').value.trim() || null,
+      phone: document.getElementById('pa-phone').value.trim() || null,
+      address: document.getElementById('pa-addr').value.trim() || null,
+      plan: document.getElementById('pa-plan').value.trim() || null,
+      amount: parseAmount(document.getElementById('pa-amount').value) || null,
+      capitas: parseInt(document.getElementById('pa-cap').value) || 1,
+      modalidad: getMet('pa-msel'),
+      fecha_alta: enrollment, enrollment_date: enrollment,
+      photos: photos
+    });
+  } catch(e) {
+    if(e && e.message === 'SAVE_FAILED') return;
+    toast('Error inesperado al guardar', true); return;
+  }
   closeD(); loadAll();
-  toast(_attachedPhotoData ? '✅ Afiliado guardado con foto adjunta' : '✅ Afiliado guardado');
+  toast(hadPhoto ? '✅ Afiliado guardado con foto adjunta' : '✅ Afiliado guardado');
 }
 
 function addPhotoToClient(clientId){
@@ -2090,6 +2161,7 @@ function addPhotoToClient(clientId){
       toast('✅ Foto adjuntada');
       setTimeout(function(){ openDetail(clientId) }, 100);
     } catch(err){
+      if(err && err.message === 'SAVE_FAILED') return; // toast ya mostrado
       const msg = (err && err.message) ? err.message : 'Error desconocido';
       toast('Error: ' + msg, true);
     }
@@ -2149,7 +2221,8 @@ function deletePhoto(clientId, photoId, overlay){
   const c = db.clients.find(function(x){ return x.id === clientId });
   if(!c) return;
   c.photos = (c.photos||[]).filter(function(p){ return p.id !== photoId });
-  saveDB(db); loadAll();
+  try { saveDB(db); } catch(e) { return; }
+  loadAll();
   closePhotoViewerOverlay(overlay);
   toast('Foto eliminada');
   setTimeout(function(){ openDetail(clientId) }, 100);
@@ -2191,19 +2264,22 @@ function insertTask(row){
     note: row.note || null, done: false, done_at: null,
     created_at: new Date().toISOString()
   };
-  db.tasks.push(rec); saveDB(db); return rec;
+  db.tasks.push(rec);
+  try { saveDB(db); } catch(e) { throw e; } // propaga para que saveTask no muestre éxito
+  return rec;
 }
 function updateTask(id, patch){
   const db = getDB();
   const t = (db.tasks||[]).find(function(x){ return x.id === id });
   if(!t) return false;
   Object.assign(t, patch);
-  saveDB(db); return true;
+  try { saveDB(db); } catch(e) { return false; }
+  return true;
 }
 function deleteTask(id){
   const db = getDB();
   db.tasks = (db.tasks||[]).filter(function(x){ return x.id !== id });
-  saveDB(db);
+  try { saveDB(db); } catch(e) {}
 }
 function toggleTaskDone(id){
   const db = getDB();
@@ -2211,7 +2287,7 @@ function toggleTaskDone(id){
   if(!t) return;
   t.done = !t.done;
   t.done_at = t.done ? new Date().toISOString() : null;
-  saveDB(db);
+  try { saveDB(db); } catch(e) {}
 }
 
 function setAgendaView(v){
@@ -2477,12 +2553,17 @@ function saveTask(){
   const note = document.getElementById('task-note').value.trim() || null;
   if(!text){ toast('Ingresá un título', true); return; }
   if(!date){ toast('Ingresá una fecha', true); return; }
-  if(_taskEditId){
-    updateTask(_taskEditId, {title:text, date:date, time:time, type:_taskType, client_id:_taskClientId, note:note});
-    toast('✅ Tarea actualizada');
-  } else {
-    insertTask({title:text, date:date, time:time, type:_taskType, client_id:_taskClientId, note:note});
-    toast('✅ Tarea agendada');
+  try {
+    if(_taskEditId){
+      updateTask(_taskEditId, {title:text, date:date, time:time, type:_taskType, client_id:_taskClientId, note:note});
+      toast('✅ Tarea actualizada');
+    } else {
+      insertTask({title:text, date:date, time:time, type:_taskType, client_id:_taskClientId, note:note});
+      toast('✅ Tarea agendada');
+    }
+  } catch(e) {
+    if(e && e.message === 'SAVE_FAILED') return;
+    toast('Error al guardar tarea', true); return;
   }
   closeD();
   S.agendaDay = date; S.agendaMonth = date.slice(0,7);
